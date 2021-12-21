@@ -101,7 +101,7 @@ ssize_t Sio_putl(long v);
 void Sio_error(char s[]);
 
 /* Unix I/O wrappers */
-int Open(const char *pathname, int flags, mode_t mode);
+int Open(const char *pathname, int flags);
 ssize_t Read(int fd, void *buf, size_t count);
 ssize_t Write(int fd, const void *buf, size_t count);
 off_t Lseek(int fildes, off_t offset, int whence);

@@ -318,11 +318,11 @@ void Sio_error(char s[])
  * Wrappers for Unix I/O routines
  ********************************/
 
-int Open(const char *pathname, int flags, mode_t mode) 
+int Open(const char *pathname, int flags) 
 {
     int rc;
 
-    if ((rc = open(pathname, flags, mode))  < 0)
+    if ((rc = open(pathname, flags))  < 0)
 	unix_error("Open error");
     return rc;
 }

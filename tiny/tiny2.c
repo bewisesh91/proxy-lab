@@ -80,7 +80,7 @@ void doit(int fd){
   sscanf(buf, "%s %s %s", method, uri, version); // buf에 있는 내용을 method, uri, version이라는 문자열에 저장한다.
   
   // strcasecmp : 문자열 비교 함수, 첫 번째 인자와 두 번째 인자가 같은 문자열이면 0을 반환한다.
-  if (strcasecmp(method, "GET")){ // method가 "GET"이 아니라면 clienterror 함수를 실행한다.
+  if (strcasecmp(method, "GET") || strcasecmp(method, "HEAD") ){ // method가 "GET"이 아니라면 clienterror 함수를 실행한다.
     clienterror(fd, method, "501", "Not implemented", "Tiny does not implement this method");
     return;
   }
@@ -202,7 +202,7 @@ int parse_uri(char *uri, char *filename, char *cgiargs){
   }
 }
 
-void serve_static(int fd, char *filename, int filesize){
+void serve_static(int fd, char *filename, int filesize, char *method){
   int srcfd;
   char *srcp, filetype[MAXLINE], buf[MAXBUF], *fbuf;
 
@@ -225,6 +225,7 @@ void serve_static(int fd, char *filename, int filesize){
   printf("Response headers: \n");
   printf("%s", buf);
   
+  if (strcasecmp(method, "GET") == 0){
   // open : 첫 번째 인자의 파일을 이후 인자들의 속성으로 연다.
   // filename에 해당하는 파일을 읽기 권한으로 연다.
   srcfd = Open(filename, O_RDONLY);
@@ -243,6 +244,7 @@ void serve_static(int fd, char *filename, int filesize){
   // Close(srcfd);
   // Rio_writen(fd, fbuf, filesize);
   // free(fbuf);
+  }
 }
 
 // get_filetype : filename에서 MIME 타입에 해당하는 접미사를 찾아서 filetype에 입력해준다.
@@ -262,7 +264,7 @@ void get_filetype(char *filename, char *filetype){
     strcpy(filetype, "text/plain");
 }
 
-void serve_dynamic(int fd, char *filename, char *cgiargs){
+void serve_dynamic(int fd, char *filename, char *cgiargs, char *method){
   char buf[MAXLINE], *emptylist[] = {NULL};
 
   /* Return first part of HTTP response */
@@ -282,6 +284,7 @@ void serve_dynamic(int fd, char *filename, char *cgiargs){
     // setenv : 첫 번째 인자(환경변수)를 두 번째 인자(값)으로 변경한다. 
     // 세 번째 인자는 기존 환경 변수의 유무에 상관없이 값을 변경할 것이라면 1, 아니라면 0을 지정한다.
     setenv("QUERY_STRING", cgiargs, 1);
+    setenv("REQUEST_METHOD", method, 1)
 
     // 표준 입출력을 fd(connfd)로 재지정한다.
     Dup2(fd, STDOUT_FILENO);              /* Redirect stdout to client */
