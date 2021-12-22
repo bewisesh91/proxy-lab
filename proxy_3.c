@@ -4,10 +4,11 @@
 /* Recommended max cache and object sizes */
 #define MAX_CACHE_SIZE 1049000
 #define MAX_OBJECT_SIZE 102400
-#define CACHE_OBJS_COUNT 10
 #define LRU_MAGIC_NUMBER 9999
 // Least Recently Used
 // LRU: 가장 오랫동안 참조되지 않은 페이지를 교체하는 기법
+
+#define CACHE_OBJS_COUNT 10
 
 /* You won't lose style points for including this long line in your code */
 static const char *user_agent_hdr =
@@ -38,28 +39,29 @@ void cache_uri(char *uri, char *buf);
 void readerPre(int i);
 void readerAfter(int i);
 
-typedef struct
+typedef struct 
 {
   char cache_obj[MAX_OBJECT_SIZE];
   char cache_url[MAXLINE];
   int LRU;
   int isEmpty;
 
-  int readCnt;      // count of readers
-  sem_t wmutex;     // protects accesses to cache
-  sem_t rdcntmutex; // protects accesses to readcnt
-} cache_block;
+  int readCnt;  // count of readers
+  sem_t wmutex;  // protects accesses to cache
+  sem_t rdcntmutex;  // protects accesses to readcnt
+}cache_block;
+
 
 typedef struct
 {
-  cache_block cacheobjs[CACHE_OBJS_COUNT]; // ten cache blocks
+  cache_block cacheobjs[CACHE_OBJS_COUNT];  // ten cache blocks
   int cache_num;
-} Cache;
+}Cache;
 
 Cache cache;
 
-int main(int argc, char **argv)
-{
+
+int main(int argc, char **argv) {
   int listenfd, connfd;
   socklen_t clientlen;
   char hostname[MAXLINE], port[MAXLINE];
@@ -68,16 +70,14 @@ int main(int argc, char **argv)
 
   cache_init();
 
-  if (argc != 2)
-  {
+  if (argc != 2) {
     // fprintf: 출력을 파일에다 씀. strerr: 파일 포인터
     fprintf(stderr, "usage: %s <port> \n", argv[0]);
-    exit(1); // exit(1): 에러 시 강제 종료
+    exit(1);  // exit(1): 에러 시 강제 종료
   }
   Signal(SIGPIPE, SIG_IGN);
   listenfd = Open_listenfd(argv[1]);
-  while (1)
-  {
+  while (1) {
     clientlen = sizeof(clientaddr);
     connfd = Accept(listenfd, (SA *)&clientaddr, &clientlen);
 
@@ -97,50 +97,46 @@ int main(int argc, char **argv)
   return 0;
 }
 
-void *thread(void *vargsp)
-{
+void *thread(void *vargsp) {
   int connfd = (int)vargsp;
   Pthread_detach(pthread_self());
   doit(connfd);
   Close(connfd);
 }
 
-void doit(int connfd)
-{
+void doit(int connfd) {
   int end_serverfd;
 
   char buf[MAXLINE], method[MAXLINE], uri[MAXLINE], version[MAXLINE];
   char endserver_http_header[MAXLINE];
   char hostname[MAXLINE], path[MAXLINE];
   int port;
-
+  
   // rio: client's rio / server_rio: endserver's rio
   rio_t rio, server_rio;
 
   Rio_readinitb(&rio, connfd);
   Rio_readlineb(&rio, buf, MAXLINE);
-  sscanf(buf, "%s %s %s", method, uri, version); // read the client reqeust line
+  sscanf(buf, "%s %s %s", method, uri, version);  // read the client reqeust line
 
-  if (strcasecmp(method, "GET"))
-  {
+  if (strcasecmp(method, "GET")) {
     printf("Proxy does not implement the method");
     return;
   }
-
+  
   char url_store[100];
   strcpy(url_store, uri);
 
   // the url is cached?
   int cache_index;
   // in cache then return the cache content
-  if ((cache_index = cache_find(url_store)) != -1)
-  {
+  if ((cache_index=cache_find(url_store)) != -1) {
     readerPre(cache_index);
     Rio_writen(connfd, cache.cacheobjs[cache_index].cache_obj, strlen(cache.cacheobjs[cache_index].cache_obj));
     readerAfter(cache_index);
     return;
   }
-
+  
   // parse the uri to get hostname, file path, port
   parse_uri(uri, hostname, path, &port);
 
@@ -149,8 +145,7 @@ void doit(int connfd)
 
   // connect to the end server
   end_serverfd = connect_endServer(hostname, port, endserver_http_header);
-  if (end_serverfd < 0)
-  {
+  if (end_serverfd < 0) {
     printf("connection failed\n");
     return;
   }
@@ -164,8 +159,7 @@ void doit(int connfd)
   char cachebuf[MAX_OBJECT_SIZE];
   int sizebuf = 0;
   size_t n;
-  while ((n = Rio_readlineb(&server_rio, buf, MAXLINE)) != 0)
-  {
+  while ((n=Rio_readlineb(&server_rio, buf, MAXLINE)) != 0) {
     // printf("proxy received %ld bytes, then send\n", n);
     sizebuf += n;
     if (sizebuf < MAX_OBJECT_SIZE)
@@ -175,38 +169,34 @@ void doit(int connfd)
   Close(end_serverfd);
 
   // store it
-  if (sizebuf < MAX_OBJECT_SIZE)
-  {
+  if (sizebuf < MAX_OBJECT_SIZE) {
     cache_uri(url_store, cachebuf);
   }
 }
 
-void build_http_header(char *http_header, char *hostname, char *path, int port, rio_t *client_rio)
-{
+void build_http_header(char *http_header, char *hostname, char *path, int port, rio_t *client_rio) {
   char buf[MAXLINE], request_hdr[MAXLINE], other_hdr[MAXLINE], host_hdr[MAXLINE];
-
+  
   // request line
   sprintf(request_hdr, requestline_hdr_format, path);
 
   // get other request header for client rio and change it
-  while (Rio_readlineb(client_rio, buf, MAXLINE) > 0)
-  {
+  while (Rio_readlineb(client_rio, buf, MAXLINE) > 0) {
     if (strcmp(buf, endof_hdr) == 0)
-      break; // EOF
-
-    if (!strncasecmp(buf, host_key, strlen(host_key)))
-    {
+      break;  // EOF
+    
+    if (!strncasecmp(buf, host_key, strlen(host_key))) {
       strcpy(host_hdr, buf);
       continue;
     }
 
-    if (!strncasecmp(buf, connection_key, strlen(connection_key)) && !strncasecmp(buf, proxy_connection_key, strlen(proxy_connection_key)) && !strncasecmp(buf, user_agent_key, strlen(user_agent_key)))
-    {
-      strcat(other_hdr, buf);
-    }
+    if (!strncasecmp(buf, connection_key, strlen(connection_key))
+      && !strncasecmp(buf, proxy_connection_key, strlen(proxy_connection_key))
+      && !strncasecmp(buf, user_agent_key, strlen(user_agent_key))) {
+        strcat(other_hdr, buf);
+      }
   }
-  if (strlen(host_hdr) == 0)
-  {
+  if (strlen(host_hdr) == 0) {
     sprintf(host_hdr, host_hdr_format, hostname);
   }
   sprintf(http_header, "%s%s%s%s%s%s%s",
@@ -221,53 +211,43 @@ void build_http_header(char *http_header, char *hostname, char *path, int port, 
 }
 
 // Connect to the end server
-inline int connect_endServer(char *hostname, int port, char *http_header)
-{
+inline int connect_endServer(char *hostname, int port, char *http_header) {
   char portStr[100];
   sprintf(portStr, "%d", port);
   return Open_clientfd(hostname, portStr);
 }
 
 // parse the uri to get hostname, file path, port
-void parse_uri(char *uri, char *hostname, char *path, int *port)
-{
+void parse_uri(char *uri, char *hostname, char *path, int *port) {
   *port = 80;
   char *pos = strstr(uri, "//");
 
-  pos = pos != NULL ? pos + 2 : uri;
+  pos = pos!=NULL? pos+2:uri;
 
   char *pos2 = strstr(pos, ":");
   // sscanf(pos, "%s", hostname);
-  if (pos2 != NULL)
-  {
+  if (pos2 != NULL) {
     *pos2 = '\0';
     sscanf(pos, "%s", hostname);
-    sscanf(pos2 + 1, "%d%s", port, path);
-  }
-  else
-  {
+    sscanf(pos2+1, "%d%s", port, path);
+  } else {
     pos2 = strstr(pos, "/");
-    if (pos2 != NULL)
-    {
-      *pos2 = '\0'; // 중간에 끊으려고
+    if (pos2 != NULL) {
+      *pos2 = '\0';  // 중간에 끊으려고
       sscanf(pos, "%s", hostname);
       *pos2 = '/';
       sscanf(pos2, "%s", path);
-    }
-    else
-    {
+    } else {
       scanf(pos, "%s", hostname);
     }
   }
   return;
 }
 
-void cache_init()
-{
+void cache_init() {
   cache.cache_num = 0;
   int i;
-  for (i = 0; i < CACHE_OBJS_COUNT; i++)
-  {
+  for (i=0; i<CACHE_OBJS_COUNT; i++) {
     cache.cacheobjs[i].LRU = 0;
     cache.cacheobjs[i].isEmpty = 1;
 
@@ -281,8 +261,7 @@ void cache_init()
   }
 }
 
-void readerPre(int i)
-{
+void readerPre(int i) {
   P(&cache.cacheobjs[i].rdcntmutex);
   cache.cacheobjs[i].readCnt++;
   if (cache.cacheobjs[i].readCnt == 1)
@@ -290,8 +269,7 @@ void readerPre(int i)
   V(&cache.cacheobjs[i].rdcntmutex);
 }
 
-void readerAfter(int i)
-{
+void readerAfter(int i) {
   P(&cache.cacheobjs[i].rdcntmutex);
   cache.cacheobjs[i].readCnt--;
   if (cache.cacheobjs[i].readCnt == 0)
@@ -299,11 +277,9 @@ void readerAfter(int i)
   V(&cache.cacheobjs[i].rdcntmutex);
 }
 
-int cache_find(char *url)
-{
+int cache_find(char *url) {
   int i;
-  for (i = 0; i < CACHE_OBJS_COUNT; i++)
-  {
+  for (i=0; i<CACHE_OBJS_COUNT; i++) {
     readerPre(i);
     if ((cache.cacheobjs[i].isEmpty == 0) && (strcmp(url, cache.cacheobjs[i].cache_url) == 0))
       break;
@@ -314,22 +290,18 @@ int cache_find(char *url)
   return i;
 }
 
-int cache_eviction()
-{
+int cache_eviction() {
   int min = LRU_MAGIC_NUMBER;
   int minindex = 0;
   int i;
-  for (i = 0; i < CACHE_OBJS_COUNT; i++)
-  {
+  for (i=0; i<CACHE_OBJS_COUNT; i++) {
     readerPre(i);
-    if (cache.cacheobjs[i].isEmpty == 1)
-    {
+    if (cache.cacheobjs[i].isEmpty == 1) {
       minindex = i;
       readerAfter(i);
       break;
     }
-    if (cache.cacheobjs[i].LRU < min)
-    {
+    if (cache.cacheobjs[i].LRU < min) {
       minindex = i;
       min = cache.cacheobjs[i].LRU;
       readerAfter(i);
@@ -340,33 +312,27 @@ int cache_eviction()
   return minindex;
 }
 
-void writePre(int i)
-{
+void writePre(int i) {
   P(&cache.cacheobjs[i].wmutex);
 }
 
-void writeAfter(int i)
-{
+void writeAfter(int i) {
   V(&cache.cacheobjs[i].wmutex);
 }
 
 // update the LRU number except the new cache one
-void cache_LRU(int index)
-{
+void cache_LRU(int index) {
   int i;
-  for (i = 0; i < index; i++)
-  {
+  for (i=0; i<index; i++) {
     writePre(i);
     if (cache.cacheobjs[i].isEmpty == 0 && i != index)
       cache.cacheobjs[i].LRU--;
     writeAfter(i);
   }
   i++;
-  for (i; i < CACHE_OBJS_COUNT; i++)
-  {
+  for (i; i<CACHE_OBJS_COUNT; i++) {
     writePre(i);
-    if (cache.cacheobjs[i].isEmpty == 0 && i != index)
-    {
+    if (cache.cacheobjs[i].isEmpty == 0 && i != index) {
       cache.cacheobjs[i].LRU--;
     }
     writeAfter(i);
@@ -374,10 +340,9 @@ void cache_LRU(int index)
 }
 
 // cache the uri and content in cache
-void cache_uri(char *uri, char *buf)
-{
+void cache_uri(char *uri, char *buf) {
   int i = cache_eviction();
-
+  
   writePre(i);
 
   strcpy(cache.cacheobjs[i].cache_obj, buf);
